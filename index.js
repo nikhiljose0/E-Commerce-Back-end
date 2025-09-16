@@ -521,6 +521,7 @@ const jwt = require("jsonwebtoken");
 const multer = require("multer");
 const path = require("path");
 const cors = require("cors");
+require("dotenv").config(); // ✅ Load .env
 
 const app = express();
 
@@ -529,9 +530,13 @@ app.use(express.json());
 app.use(cors());
 
 // Database Connection With MongoDB
-mongoose.connect("mongodb+srv://nikhil8:Nikhil@cluster0.uc1wprr.mongodb.net/ecommerce?retryWrites=true&w=majority&appName=E-commerce");
+mongoose.connect(process.env.MONGO_URI, {
+  useNewUrlParser: true,
+  useUnifiedTopology: true,
+});
 
-// Image Storage Engine
+// Image Storage Engine (⚠️ Won’t work on Vercel, only local)
+// For deployment, use Cloudinary or S3 instead of local uploads
 const storage = multer.diskStorage({
   destination: "./upload/images",
   filename: (req, file, cb) => {
@@ -543,7 +548,7 @@ const upload = multer({ storage: storage });
 app.post("/upload", upload.single("product"), (req, res) => {
   res.json({
     success: 1,
-    image_url: `/images/${req.file.filename}`, // relative path for Vercel
+    image_url: `/images/${req.file.filename}`,
   });
 });
 app.use("/images", express.static("upload/images"));
@@ -555,7 +560,7 @@ const fetchuser = async (req, res, next) => {
     return res.status(401).send({ errors: "Please authenticate using a valid token" });
   }
   try {
-    const data = jwt.verify(token, "secret_ecom");
+    const data = jwt.verify(token, process.env.JWT_SECRET); // ✅ use env secret
     req.user = data.user;
     next();
   } catch (error) {
@@ -597,7 +602,7 @@ app.post("/login", async (req, res) => {
     if (passCompare) {
       const data = { user: { id: user.id } };
       success = true;
-      const token = jwt.sign(data, "secret_ecom");
+      const token = jwt.sign(data, process.env.JWT_SECRET);
       return res.json({ success, token });
     }
     return res.status(400).json({ success, errors: "Incorrect email or password" });
@@ -623,7 +628,7 @@ app.post("/signup", async (req, res) => {
   await user.save();
 
   const data = { user: { id: user.id } };
-  const token = jwt.sign(data, "secret_ecom");
+  const token = jwt.sign(data, process.env.JWT_SECRET);
 
   res.json({ success: true, token });
 });
@@ -692,8 +697,11 @@ app.post("/getcart", fetchuser, async (req, res) => {
 
 // ✅ Export for Vercel
 module.exports = app;
-const port = process.env.PORT || 4000;
 
-app.listen(port, () => {
-  console.log(`🚀 Server running locally on http://localhost:${port}`);
-});
+// ✅ Local development only
+if (require.main === module) {
+  const port = process.env.PORT || 4000;
+  app.listen(port, () => {
+    console.log(`🚀 Server running locally on http://localhost:${port}`);
+  });
+}
